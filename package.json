@@ -1,0 +1,25 @@
+{
+  "name": "ozcamp_2",
+  "version": "1.0.0",
+  "description": "Second iteration in node",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deppierre/ozcamp_2.git"
+  },
+  "author": "Pierre Depretz",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/deppierre/ozcamp_2/issues"
+  },
+  "homepage": "https://github.com/deppierre/ozcamp_2#readme",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.10",
+    "dotenv": "^16.0.0",
+    "mongodb": "^4.5.0",
+    "request-promise": "^4.2.6"
+  }
+}
