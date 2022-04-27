@@ -1,61 +1,66 @@
-const request = require("request-promise")
 const cheerio = require("cheerio")
-const fs = require("fs")
+const axios = require("axios")
 const env = require('dotenv').config()
-
 const { MongoClient, ServerApiVersion } = require('mongodb');
-const { map } = require("cheerio/lib/api/traversing");
-const headers = {
-    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-    "accept-encoding": "gzip, deflate, br",
-    "accept-language": "en-US,en;q=0.9,es;q=0.8"
-};
 
-//NP campings
-function getCampings(parks) {
-    for (const [key, value] of parks.entries()) {
-        request({
-            uri: value.link,
-            headers: headers,
-            gzip: true,
-        }, function (err, res, body) {
-            if (err) return console.error(err);
-            let $ = cheerio.load(body);
+var start = new Date()
+var hrstart = process.hrtime()
+var simulateTime = 5
 
-            $(".scrollingBox__item.camping h3 a").get().map(ele => {
-                value.campings.push({
-                    name: $(ele).text(),
-                    link: $(ele).attr('href')
-                })
-                console.log(`getCampings::New camping added (${$(ele).text()})`)
-            });
-        });
-    }
+function getExecutionTime(){
+    setTimeout(function (argument) {
+        // execution time simulated with setTimeout function
+        var end = new Date() - start,
+        hrend = process.hrtime(hrstart)
+    
+        console.info('Execution time: %dms', end)
+        console.info('Execution time (hr): %ds %dms', hrend[0], hrend[1] / 1000000)
+    }, simulateTime)
 }
 
-//National Parks
-function getNationalParks(callback) {
-    request({
-        uri: process.env.PARKS,
-        headers: headers,
-        gzip: true,
-    }, function (err, res, body) {
-        if (err) return console.error(err);
+//NP campings
+async function getCampings(listParks) {
+    try{
+        const promises = listParks.map(async (park) => {
+            const { data } = await axios.get(park.link);
+            const $ = cheerio.load(data);    
+            $(".scrollingBox__item.camping h3 a").get().map(camping => {
+                park.campings.push({
+                    name: $(camping).text().trim(),
+                    link: `${park.link.split("/")[2]}${$(camping).attr('href')}`
+                })
+                console.log(`getCampings:: New camping created (${park.campings.slice(-1)[0].name})`);
+            });
+            return listParks;
+        })
+        await Promise.all(promises);
+        await insertMany(listParks);
+        console.log(`getCampings:: done`);
+    } catch (err) {
+        console.error(err);
+    }
+};
 
-        let $ = cheerio.load(body);    
-        let parks = $(".dynamicListing li a").get().map(ele => {
-            const link = $(ele).attr('href');
+//National Parks
+async function getNationalParks() {
+    try{
+        const { data } = await axios.get(process.env.PARKS);
+        const $ = cheerio.load(data);    
+        const listParks = $(".dynamicListing li a").get().map(park => {
             return {
-                ParkName: $(ele).text(),
-                link: link,
+                parkName: $(park).text().trim(),
+                link: $(park).attr('href'),
                 campings: []
             }
         });
-        callback(parks);
-    });
+        console.log(`getNationalParks:: ${listParks.length} Parks collected`);
+        return listParks;
+    } catch (err) {
+        console.error(err);
+    }
 };
 
-function insertMany(documents){
+async function insertMany(documents){
     //MongoDB
     const uri = process.env.URI;
     const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
@@ -66,18 +71,22 @@ function insertMany(documents){
 
         try{
             await client.db().dropCollection(mycoll);
-            console.log(`refreshParkList::Collection ${mycoll} deleted`);
+            console.log(`insertMany:: Collection ${mycoll} deleted`);
         } catch(err) {
             if (err.codeName == 'NamespaceNotFound') {
-                console.log(`refreshParkList::Collection ${mycoll} already deleted`)
+                console.log(`insertMany:: Collection ${mycoll} already deleted`)
             }
         } finally{
-            let result = await client.db().collection(mycoll).insertMany(parks);
-            console.log(`refreshParkList::${result.insertedCount} parks created`);
+            let result = await client.db().collection(mycoll).insertMany(documents);
+            console.log(`insertMany:: ${result.insertedCount} documents created`);
             client.close();
         }
     });
 }
 
-getNationalParks(getCampings);
-// getCampings(insertMany);
+async function main(){
+    await getCampings(await getNationalParks());
+    getExecutionTime();
+}
+
+main();

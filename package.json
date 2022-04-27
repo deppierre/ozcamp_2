@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/deppierre/ozcamp_2#readme",
   "dependencies": {
+    "axios": "^0.27.1",
     "cheerio": "^1.0.0-rc.10",
     "dotenv": "^16.0.0",
     "mongodb": "^4.5.0",
