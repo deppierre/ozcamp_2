@@ -78,36 +78,6 @@ function insertMany(documents){
         }
     });
 }
-//     //Camping URL
-//     parks.forEach(async function (mypark, index, arr) {
-//         var response = await request({
-//             uri: mypark.url,
-//             headers: headers,
-//             gzip: true,
-//         });
-
-//         var $ = cheerio.load(response);
-
-
-//         // $(".scrollingBox__item").each(function (idx, el) {
-//         //     var name = $(el).text();
-//         //     var link = $(el).attr('href');
-
-//         //     console.log(`${name} ${link}`);
-//         // });  
-
-//     try{
-//         await client.db().dropCollection(mycoll);
-//         console.log(`refreshParkList::Collection ${mycoll} deleted`);
-//     } catch(err) {
-//         if (err.codeName == 'NamespaceNotFound') {
-//             console.log(`refreshParkList::Collection ${mycoll} already deleted`)
-//         }
-//     } finally{
-//         let result = await client.db().collection(mycoll).insertMany(parks);
-//         console.log(`refreshParkList::${result.insertedCount} parks created`);
-//     }
-// }
 
 getNationalParks(getCampings);
 // getCampings(insertMany);
