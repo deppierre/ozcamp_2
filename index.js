@@ -14,8 +14,7 @@ function getExecutionTime(){
         const end = new Date() - start,
         hrend = process.hrtime(hrstart)
     
-        console.info('Execution time: %dms', end)
-        console.info('Execution time (hr): %ds %dms', hrend[0], hrend[1] / 1000000)
+        console.info('INFO: Execution time: %dms', end)
     }, simulateTime)
 }
 
@@ -53,26 +52,35 @@ function getHtmlBody(url){
     }
 }
 
-//National Parks
 async function getNationalParks() {
     try{
+        const allelements = {}
         const body1 = await getHtmlBody(process.env.PARKS)
+
         for (const element of body1(".dynamicListing li a")) {
-            url1 = body1(element).attr('href')
-            const body2 = await getHtmlBody(url1)
-            for (const element2 of body2(".scrollingBox__item.camping h3 a")){
-                console.log(body2(element2).text().trim())
-                console.log(`${url1.split("/")[2]}${body2(element2).attr('href')}`)
+            allelements[body1(element).text().trim()] = {
+                url: body1(element).attr('href')
             }
         }
+        await Promise.all(Object.entries(allelements).map(async([key, value]) => {
+            const body2 = await getHtmlBody(value.url)
+            const newBody2 = body2(".scrollingBox__item.camping h3 a")
+            if(newBody2.length > 0){
+                allelements[key]["campings"] = {}
+                for (const element2 of newBody2){
+                    allelements[key]["campings"][body2(element2).text().trim()] = value.url.split("/")[2] + body2(element2).attr('href').trim()
+                }
+            }
+        }))
+        console.log(`INFO: ${Object.keys(allelements).length} parks fetched`)
     } catch(err) {
         console.error(`ERROR: ${err}`)
     }
 };
 
-async function main(){
+async function main () {
     await getNationalParks();
     getExecutionTime();
 }
 
-main();
+main()
