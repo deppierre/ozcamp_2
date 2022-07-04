@@ -1,23 +1,11 @@
 const cheerio = require("cheerio")
-const mongoose = require("mongoose")
+// const Parks = require("./parksSchema")
 const axios = require("axios")
 const env = require('dotenv').config()
+const mongoose = require("mongoose")
+const Parks = require("./parksSchema")
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const { data } = require("cheerio/lib/api/attributes");
-
-async function insertMany(documents, mycoll=""){
-    try {
-        await client.db().dropCollection(mycoll);
-        console.log(`INFO: Collection ${mycoll} deleted`);
-    } catch(err) {
-        if (err.codeName == 'NamespaceNotFound') {
-            console.log(`WARNING: Collection ${mycoll} already deleted`)
-        }
-    } finally {
-        const result = await client.db().collection(mycoll).insertMany(documents);
-        return result
-    }
-}
 
 function getHtmlBody(url){
     if(url){
@@ -27,9 +15,9 @@ function getHtmlBody(url){
     }else{
         throw `URL is missing(${url})`
     }
-}
+};
 
-async function getNationalParks() {
+async function getNationalParks(){
     const allelements = []
     await getHtmlBody(process.env.PARKS).then((body) => {
         body(".dynamicListing li a").map((v, k) => {
@@ -44,9 +32,12 @@ async function getNationalParks() {
         return getHtmlBody(v.url).then((body2) => {
             const newBody2 = body2(".scrollingBox__item.camping h3 a")
             if(newBody2.length > 0){
-                allelements[k]["campings"] = {}
+                allelements[k]["campings"] = []
                 for (const element2 of newBody2){
-                    allelements[k]["campings"][body2(element2).text().trim()] = v.url.split("/")[2] + body2(element2).attr('href').trim()
+                    allelements[k]["campings"].push({
+                        name: body2(element2).text().trim(),
+                        url: v.url.split("/")[2] + body2(element2).attr('href').trim()
+                    })
                 }
             }
         })
@@ -57,24 +48,28 @@ async function getNationalParks() {
 
 async function main () {
     try{
-        console.time("Execution time");
-        //MongoDB
-        await client.connect();
+        console.time("Execution time")
 
-        const parks = await getNationalParks();
+        //Mongoose
+        mongoose.connect(process.env.URI, {useNewUrlParser: true, useUnifiedTopology: true}).then(() => {
+            console.log("INFO: Mongoose connected")
+        }).catch((e) => 
+            console.error(e))
+        
+        const parks = await getNationalParks()
         console.log(`INFO: ${Object.keys(parks).length} parks fetched`)
-        const insertParks = await insertMany(parks, mycoll="parks");
-        console.log(`INFO: ${insertParks.insertedCount} parks inserted`);
+
+        await Parks.deleteMany()
+        const data = await Parks.create(parks)
+        console.log(`INFO: ${data.length} parks inserted`)
     }
     catch(err) {
         console.error(`ERROR: ${err}`)
     }
     finally{
-        await client.close();
-        console.timeEnd("Execution time");
+        console.timeEnd("Execution time")
+        mongoose.connection.close()
     }
-}
+};
 
-const client = new MongoClient(process.env.URI, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
-
-main();
+main()
