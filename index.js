@@ -30,30 +30,28 @@ function getHtmlBody(url){
 }
 
 async function getNationalParks() {
-    const 
-        allpromises = []
-        allelements = []
-    const body1 = await getHtmlBody(process.env.PARKS)
+    const allelements = []
+    await getHtmlBody(process.env.PARKS).then((body) => {
+        body(".dynamicListing li a").map((v, k) => {
+            allelements.push({ 
+                "name": body(k).text().trim(), 
+                "url": body(k).attr('href') 
+            })
+        })
+    })
 
-    for (const element of body1(".dynamicListing li a")) {
-        const site = {
-            "name": body1(element).text().trim(),
-            "url": body1(element).attr('href')
-        }
-        allelements.push(site)
-    }
-
-    await Promise.all(allelements.map(async (value, key) => {
-        return getHtmlBody(value.url).then( (body2) => {
+    await Promise.all(allelements.map(async (v, k) => {
+        return getHtmlBody(v.url).then((body2) => {
             const newBody2 = body2(".scrollingBox__item.camping h3 a")
             if(newBody2.length > 0){
-                allelements[key]["campings"] = {}
+                allelements[k]["campings"] = {}
                 for (const element2 of newBody2){
-                    allelements[key]["campings"][body2(element2).text().trim()] = value.url.split("/")[2] + body2(element2).attr('href').trim()
+                    allelements[k]["campings"][body2(element2).text().trim()] = v.url.split("/")[2] + body2(element2).attr('href').trim()
                 }
             }
         })
     }))
+
     return allelements
 };
 
@@ -66,7 +64,7 @@ async function main () {
         const parks = await getNationalParks();
         console.log(`INFO: ${Object.keys(parks).length} parks fetched`)
         const insertParks = await insertMany(parks, mycoll="parks");
-        console.log(`INFO: ${insertParks.insertedCount} documents created`);
+        console.log(`INFO: ${insertParks.insertedCount} parks inserted`);
     }
     catch(err) {
         console.error(`ERROR: ${err}`)
