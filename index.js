@@ -17,7 +17,7 @@ function getHtmlBody(url){
     }
 };
 
-async function getNationalParks(){
+async function runRefreshCampingUrl(){
     const allelements = []
     await getHtmlBody(process.env.PARKS).then((body) => {
         body(".dynamicListing li a").map((v, k) => {
@@ -46,22 +46,31 @@ async function getNationalParks(){
     return allelements
 };
 
-async function main () {
+async function main (refreshCampingUrl=true, refreshCampingData=true) {
     try{
         console.time("Execution time")
 
         //Mongoose
-        mongoose.connect(process.env.URI, {useNewUrlParser: true, useUnifiedTopology: true}).then(() => {
-            console.log("INFO: Mongoose connected")
-        }).catch((e) => 
-            console.error(e))
+        await mongoose.connect(process.env.URI, {useNewUrlParser: true, useUnifiedTopology: true})
+        console.log("INFO: Mongoose connected")
         
-        const parks = await getNationalParks()
-        console.log(`INFO: ${Object.keys(parks).length} parks fetched`)
+        if(refreshCampingUrl){
+            const parks = await runRefreshCampingUrl()
+            console.log(`INFO: ${Object.keys(parks).length} parks fetched`)
 
-        await Parks.deleteMany()
-        const data = await Parks.create(parks)
-        console.log(`INFO: ${data.length} parks inserted`)
+            await Parks.deleteMany()
+            const data = await Parks.create(parks)
+            console.log(`INFO: ${data.length} parks inserted`)
+        }
+        if(refreshCampingData){
+            await Parks.find({"campings.0":{"$exists":true}}).then( (data) => {
+                data.forEach( (v1, k1) => {
+                    v1.campings.forEach( (v2,k2) => {
+                        console.log(v1["campings"][k2].name)
+                    })
+                })
+            })
+        }
     }
     catch(err) {
         console.error(`ERROR: ${err}`)
@@ -72,4 +81,4 @@ async function main () {
     }
 };
 
-main()
+main(refreshCampingUrl=false)
