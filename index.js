@@ -1,66 +1,83 @@
 const cheerio = require("cheerio")
-// const Parks = require("./parksSchema")
 const axios = require("axios")
 const env = require('dotenv').config()
-const mongoose = require("mongoose")
-const Parks = require("./parksSchema")
-const { MongoClient, ServerApiVersion } = require('mongodb');
 const { data } = require("cheerio/lib/api/attributes");
+const myDb = require('./dbConnect.js')
 
-function getHtmlBody(url){
+async function getHtmlBody(url){
     if(url){
-        return axios.get(url).then((request) => {
-            return cheerio.load(request.data)
-        }).catch(err => console.error(err))
-    }else{
+        return await axios.get(url).then(request => cheerio.load(request.data))
+    }
+    else{
         throw `URL is missing(${url})`
     }
 };
 
 async function runRefreshCampingUrl(){
-    const allelements = []
-    await getHtmlBody(process.env.PARKS).then((body) => {
-        body(".dynamicListing li a").map((v, k) => {
-            allelements.push({ 
-                "name": body(k).text().trim(), 
-                "url": body(k).attr('href') 
-            })
-        })
+    const myCollection = myDb.openColl("nationalparks")
+
+    await getHtmlBody(process.env.PARKS).then(async (body) => {
+        for (const element of body(".dynamicListing li a")){
+            await myCollection.updateOne({
+                "name": body(element).text().trim()
+            },{ $set:{
+                "name": body(element).text().trim(), 
+                "url": body(element).attr('href')
+            }}, { upsert: true })}
     })
 
-    await Promise.all(allelements.map(async (v, k) => {
-        return getHtmlBody(v.url).then((body2) => {
-            const newBody2 = body2(".scrollingBox__item.camping h3 a")
-            if(newBody2.length > 0){
-                allelements[k]["campings"] = []
-                for (const element2 of newBody2){
-                    allelements[k]["campings"].push({
-                        name: body2(element2).text().trim(),
-                        url: v.url.split("/")[2] + body2(element2).attr('href').trim()
-                    })
-                }
-            }
-        })
+    const allParks = await myCollection.find().toArray()
+
+    // await Promise.all(allParks.map((v, k) => {
+    //     getHtmlBody(v.url).then((body2) => {
+    //         const newBody2 = body2(".scrollingBox__item.camping h3 a")
+    //         if(newBody2.length > 0){
+    //             for (const element2 of newBody2){
+    //                 myCollection.updateOne({
+    //                     "name": v.name
+    //                 },{ $addToSet:{
+    //                     "campings": {
+    //                         "name": body2(element2).text().trim(),
+    //                         "url": v.url.split("/")[2] + body2(element2).attr('href').trim() }
+    //                 }})
+    //             }
+    //         }
+    //     })
+    // }))
+
+    const newAllPark = await Promise.all(allParks.map( async(v, k) => {
+        const body = await getHtmlBody(v.url)
+
+        return {
+            "name": v.name,
+            "elements": body(".scrollingBox__item.camping h3 a")
+        }
     }))
 
-    return allelements
+    newAllPark.forEach( (element) => {
+        const myArray = element.elements
+        if(myArray.length > 0){
+            for (const element2 of myArray){
+                myCollection.updateOne({
+                    "name": element.name
+                },{ $addToSet:{
+                    "campings": {
+                        "name": myArray(element2).text().trim(),
+                        "url": v.url.split("/")[2] + myArray(element2).attr('href').trim() }
+                }})
+        }}
+    })
+    return allParks
 };
 
 async function main (refreshCampingUrl=true, refreshCampingData=true) {
+
     try{
         console.time("Execution time")
-
-        //Mongoose
-        await mongoose.connect(process.env.URI, {useNewUrlParser: true, useUnifiedTopology: true})
-        console.log("INFO: Mongoose connected")
         
         if(refreshCampingUrl){
             const parks = await runRefreshCampingUrl()
             console.log(`INFO: ${Object.keys(parks).length} parks fetched`)
-
-            await Parks.deleteMany()
-            const data = await Parks.create(parks)
-            console.log(`INFO: ${data.length} parks inserted`)
         }
         if(refreshCampingData){
             await Parks.find({"campings.0":{"$exists":true}}).then( (data) => {
@@ -76,9 +93,9 @@ async function main (refreshCampingUrl=true, refreshCampingData=true) {
         console.error(`ERROR: ${err}`)
     }
     finally{
+        myDb.closeDb()
         console.timeEnd("Execution time")
-        mongoose.connection.close()
     }
 };
 
-main(refreshCampingUrl=false)
+main(refreshCampingUrl=true,refreshCampingData=false)
