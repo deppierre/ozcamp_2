@@ -6,7 +6,8 @@ const myDb = require('./dbConnect.js')
 
 async function getHtmlBody(url){
     if(url){
-        return await axios.get(url, { withCredentials: true }).then(request => cheerio.load(request.data))
+        const request = await axios.get(url, { withCredentials: true })
+        return cheerio.load(request.data)
     }
     else{
         throw `URL is missing(${url})`
@@ -17,36 +18,38 @@ async function runRefreshCampingUrl(){
     const myCollection = myDb.openColl("nationalparks")
 
     //Update national parks
-    await getHtmlBody(process.env.PARKS).then(async (body) => {
-        for (const element of body(".dynamicListing li a")){
-            await myCollection.updateOne({
-                "name": body(element).text().trim()
-            },{ $set:{
-                "name": body(element).text().trim(), 
-                "url": body(element).attr('href')
-            }}, { upsert: true })}
-    })
+    const body = await getHtmlBody(process.env.PARKS)
+    for (const element of body(".dynamicListing li a")){
+        await myCollection.updateOne({
+            "name": body(element).text().trim()
+        },{ $set:{
+            "name": body(element).text().trim(), 
+            "url": body(element).attr('href')
+        }}, { upsert: true })
+    }
 
     const allParks = await myCollection.find().toArray()
 
     //Update campings list
-    await Promise.all(allParks.map(async (v, k) => {
-        await getHtmlBody(v.url).then( async (body2) => {
-            const newBody2 = body2(".scrollingBox__item.camping h3 a")
-            if(newBody2.length > 0){
-                for (const element2 of newBody2){
-                    await myCollection.updateOne({
-                        "name": v.name
-                    },{ $addToSet:{
-                        "campings": {
-                            "name": body2(element2).text().trim(),
-                            "url": "https://" + v.url.split("/")[2] + body2(element2).attr('href').trim() 
-                        }
-                    }})
-                }
+    const fetchUrl = async (park) => {
+        const body2 = await getHtmlBody(park.url);
+        const newBody2 = body2(".scrollingBox__item.camping h3 a")
+        if(newBody2.length > 0){
+            for (const element2 of newBody2){
+                await myCollection.updateOne({
+                    "name": park.name
+                },{ $addToSet:{
+                    "campings": {
+                        "name": body2(element2).text().trim(),
+                        "url": "https://" + park.url.split("/")[2] + body2(element2).attr('href').trim() 
+                    }
+                }})
             }
-        })
-    }))
+        }
+    }
+
+    const promises = allParks.map(fetchUrl);
+    await Promise.all(promises);
 
     //Update campings metadata
 
